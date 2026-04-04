@@ -1,80 +1,67 @@
-# bot.py
-import asyncio
+import os
 import datetime
+import asyncio
+import tempfile
+
 import gspread
+import whisper
 from oauth2client.service_account import ServiceAccountCredentials
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
-import whisper
 
-# ------------------------------
-# GOOGLE SHEETS SETUP
-# ------------------------------
+TOKEN = os.getenv("TOKEN")
+CREDENTIALS_FILE = os.getenv("GOOGLE_CREDENTIALS_JSON", "credentials.json")
 
-# Put your credentials file here (same folder as bot.py)
-CREDENTIALS_FILE = "credentials.json"
+if not TOKEN:
+    raise ValueError("TOKEN environment variable is missing")
 
-# Connect to Google Sheets
-scope = ["https://spreadsheets.google.com/feeds",
-         "https://www.googleapis.com/auth/drive"]
+scope = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive",
+]
 creds = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, scope)
 client = gspread.authorize(creds)
-
-# Open your sheet (must match the name exactly)
 sheet = client.open("Voice Logs").sheet1
 
-# ------------------------------
-# WHISPER MODEL SETUP
-# ------------------------------
-
-model = whisper.load_model("base")  # or tiny, small, medium, large
-
-# ------------------------------
-# TELEGRAM BOT TOKEN
-# ------------------------------
-
-TOKEN = "8305367371:AAHyGPbS3g7i2ZCGGQrh9uL8aG4nXzrAw4A"  # <- replace this with your bot token
-
-# ------------------------------
-# VOICE HANDLER
-# ------------------------------
+model = whisper.load_model("base")
 
 async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        print("🎤 Voice received")
-
+        print("Voice received")
         voice = update.message.voice
         user = update.message.from_user.username or update.message.from_user.first_name
 
-        file = await context.bot.get_file(voice.file_id)
-        await file.download_to_drive("voice.ogg")
-        print("⬇️ Downloaded voice file")
+        tg_file = await context.bot.get_file(voice.file_id)
 
-        result = model.transcribe("voice.ogg")
-        text = result["text"]
-        print("🧠 Transcribed:", text)
+        with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp:
+            audio_path = tmp.name
+
+        await tg_file.download_to_drive(custom_path=audio_path)
+        print("Downloaded voice file")
+
+        text = await asyncio.to_thread(lambda: model.transcribe(audio_path)["text"])
+        print("Transcribed:", text)
 
         now = datetime.datetime.now()
-        date = now.strftime("%Y-%m-%d")
-        time = now.strftime("%H:%M:%S")
+        sheet.append_row([
+            now.strftime("%Y-%m-%d"),
+            now.strftime("%H:%M:%S"),
+            user,
+            text,
+        ])
+        print("Saved to Google Sheets")
 
-        sheet.append_row([date, time, user, text])
-        print("📄 Saved to Google Sheets")
-
-        await update.message.reply_text("✅ Saved to Google Sheets!")
+        await update.message.reply_text("Saved to Google Sheets!")
 
     except Exception as e:
-        print("❌ ERROR:", e)
-        await update.message.reply_text("❌ Error occurred. Check terminal.")
+        print("ERROR:", e)
+        await update.message.reply_text("Error occurred. Check terminal.")
 
-# ------------------------------
-# RUN BOT
-# ------------------------------
+def main():
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(MessageHandler(filters.VOICE, voice_handler))
+    print("Bot is running...")
+    app.run_polling()
 
-app = Application.builder().token(TOKEN).build()
-
-app.add_handler(MessageHandler(filters.VOICE, voice_handler))
-
-print("🤖 Bot is running...")
-
-app.run_polling()
+if __name__ == "__main__":
+    main()
