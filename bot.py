@@ -2,84 +2,60 @@ import os
 import json
 import base64
 import datetime
-import tempfile
-import wave
-import pydub
-from vosk import Model, KaldiRecognizer
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+import io
+import requests
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 TOKEN = os.getenv("TOKEN")
 GOOGLE_CREDENTIALS = os.getenv("GOOGLE_CREDENTIALS")
 
-if not TOKEN or not GOOGLE_CREDENTIALS:
-    raise ValueError("Missing environment variables")
-
-# Google Sheets
+# Google Sheets setup
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds_json = json.loads(base64.b64decode(GOOGLE_CREDENTIALS).decode())
 creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_json, scope)
 client = gspread.authorize(creds)
 sheet = client.open("Voice Logs").sheet1
 
-# Vosk (free, offline, tiny)
-model = Model("vosk-model-small-en-us-0.15")
-recognizer = KaldiRecognizer(model, 16000)
-
 async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        print("Voice received")
         voice = update.message.voice
         user = update.message.from_user.username or update.message.from_user.first_name
-
-        # Download voice
+        
+        # Download voice file
         file = await context.bot.get_file(voice.file_id)
-        with tempfile.NamedTemporaryFile(suffix=".ogg", delete=False) as tmp:
-            await file.download_to_drive(tmp.name)
-
-        # Convert ogg → wav → transcribe
-        audio = pydub.AudioSegment.from_ogg(tmp.name)
-        audio = audio.set_frame_rate(16000).set_channels(1)
-        wav_path = tmp.name.replace('.ogg', '.wav')
-        audio.export(wav_path, format="wav")
-
-        # Transcribe with Vosk
-        wf = wave.open(wav_path, "rb")
-        text = ""
-        while True:
-            data = wf.readframes(4000)
-            if len(data) == 0:
-                break
-            if recognizer.AcceptWaveform(data):
-                result = recognizer.Result()
-                text += json.loads(result)["text"] + " "
-
-        # Save to sheet
+        voice_bytes = await file.download_as_bytearray()
+        
+        # Use FREE HuggingFace Whisper API
+        HF_API_URL = "https://api-inference.huggingface.co/models/openai/whisper-tiny"
+        headers = {"Authorization": "Bearer hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}  # Get free token at huggingface.co
+        
+        response = requests.post(HF_API_URL, headers=headers, data=voice_bytes)
+        result = response.json()
+        text = result[0]['text'] if result else "Could not transcribe"
+        
+        # Save to Google Sheets
         now = datetime.datetime.now()
         sheet.append_row([
             now.strftime("%Y-%m-%d"),
             now.strftime("%H:%M:%S"),
             user,
-            text.strip()
+            text
         ])
-
-        print(f"Transcribed: {text}")
-        await update.message.reply_text(f"✅ '{text}' saved!")
-
-        # Cleanup
-        os.unlink(tmp.name)
-        os.unlink(wav_path)
-
+        
+        await update.message.reply_text(f"✅ Transcribed: '{text}'")
+        print(f"{user}: {text}")
+        
     except Exception as e:
-        print("ERROR:", e)
-        await update.message.reply_text("❌ Error occurred")
+        print(f"Error: {e}")
+        await update.message.reply_text("❌ Transcription failed")
 
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(MessageHandler(filters.VOICE, voice_handler))
-    print("🤖 FREE Voice Bot running...")
+    print("🤖 FREE Voice Transcription Bot Running...")
     app.run_polling()
 
 if __name__ == "__main__":
