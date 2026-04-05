@@ -31,7 +31,7 @@ client = gspread.authorize(creds)
 sheet = client.open("Voice Logs").sheet1
 
 # Load Whisper model
-model = whisper.load_model("base")
+model = whisper.load_model("tiny")
 
 async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
