@@ -5,54 +5,35 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 
 TOKEN = os.getenv("TOKEN")
-HF_TOKEN = "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"  # ← PASTE YOUR HF TOKEN
+GROQ_API_KEY = "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"  # Get free at console.groq.com
 
 async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        user = update.message.from_user.first_name
-        print(f"Voice from {user}")
-        
-        # Download voice file
+        # Download voice
         file = await context.bot.get_file(update.message.voice.file_id)
         voice_bytes = await file.download_as_bytearray()
         
-        # HuggingFace Whisper (free)
-        url = "https://api-inference.huggingface.co/models/openai/whisper-tiny"
-        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+        # Groq Whisper (FREE, lightning fast)
+        url = "https://api.groq.com/openai/v1/audio/transcriptions"
+        headers = {
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "model": "whisper-large-v3",
+            "audio": voice_bytes
+        }
         
-        response = requests.post(url, headers=headers, data=voice_bytes, timeout=60)
-        
-        # Handle HF queue/error
-        if response.status_code == 503:
-            await update.message.reply_text("⏳ Model loading... try in 30s")
-            return
-        if not response.ok:
-            await update.message.reply_text("❌ API busy, try again")
-            return
-            
+        response = requests.post(url, headers=headers, json=data, timeout=30)
         result = response.json()
-        text = result[0]['text'] if isinstance(result, list) and result else "No speech"
+        text = result.get('text', 'No speech')
         
         await update.message.reply_text(f"✅ **{text}**")
-        print(f"Transcribed: {text}")
+        print(f"✅ {text}")
         
     except Exception as e:
-        print(f"Error: {e}")
-        await update.message.reply_text("❌ Try again in 10s")
+        print(f"❌ {e}")
+        await update.message.reply_text("❌ Try again")
 
-def main():
-    # Fix conflict + timeouts
-    app = Application.builder() \
-        .token(TOKEN) \
-        .read_timeout(30) \
-        .write_timeout(30) \
-        .connect_timeout(30) \
-        .pool_timeout(30) \
-        .build()
-    
-    app.add_handler(MessageHandler(filters.VOICE, voice_handler))
-    print("🤖 Bot ready!")
-    app.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    main()
+app = Application.builder().token(TOKEN).build()
+app.add_handler
