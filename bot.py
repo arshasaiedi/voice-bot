@@ -30,7 +30,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # Use FREE HuggingFace Whisper API
         HF_API_URL = "https://api-inference.huggingface.co/models/openai/whisper-tiny"
-        headers = {"Authorization": "Bearer hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}  # Get free token at huggingface.co
+        headers = {"Authorization": "Bearer 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"}  # Get free token at huggingface.co
         
         response = requests.post(HF_API_URL, headers=headers, data=voice_bytes)
         result = response.json()
