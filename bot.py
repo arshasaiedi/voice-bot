@@ -4,17 +4,18 @@ import datetime
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes, CommandHandler
 
-# Load from Railway
+
 TOKEN = os.getenv("TOKEN")
 HF_TOKEN = os.getenv("HF_TOKEN")
-  # ← PASTE YOUR HUGGINGFACE TOKEN
 
 print(f"🚀 Starting bot...")
 print(f"🚀 Token loaded: {'YES' if TOKEN else 'NO'}")
-print(f"🚀 HF Token loaded: {'YES' if HF_TOKEN != 'hf_YOUR_FULL_HF_TOKEN_HERE' else 'NO'}")
+print(f"🚀 HF Token loaded: {'YES' if HF_TOKEN else 'NO'}")
+
 
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Bot working! Send 🎤 voice message.")
+
 
 async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -24,6 +25,11 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file = await context.bot.get_file(update.message.voice.file_id)
         voice_bytes = await file.download_as_bytearray()
         print(f"📥 Downloaded {len(voice_bytes)} bytes")
+
+        # Guard: check HF token is present
+        if not HF_TOKEN:
+            await update.message.reply_text("❌ Hugging Face token is not set (HF_TOKEN is missing).")
+            return
 
         # HuggingFace Whisper API
         url = "https://api-inference.huggingface.co/models/openai/whisper-tiny"
@@ -35,16 +41,37 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response = requests.post(url, headers=headers, data=voice_bytes, timeout=120)
 
         print(f"📡 HF status: {response.status_code}")
-        print(f"📡 HF response: {response.text[:300]}")
+        print(f"📡 HF response (head): {response.text[:350]}")
+
+        # Special handling for 410 / HTML error pages
+        if response.status_code == 410:
+            await update.message.reply_text(
+                "⚠️ Hugging Face returned 410 Gone.\n"
+                "This free Whisper endpoint may be unavailable.\n"
+                "You might need to use a different model or endpoint."
+            )
+            return
+
+        # If server returns HTML instead of JSON
+        if "text/html" in response.headers.get("content-type", "").lower():
+            await update.message.reply_text(
+                "⚠️ Transcription failed with a web‑page error.\n"
+                "Please check that your Hugging Face token is correct and has read access."
+            )
+            return
 
         if response.status_code != 200:
-            await update.message.reply_text(f"⚠️ Transcription failed.\nStatus: {response.status_code}")
+            await update.message.reply_text(
+                f"⚠️ Transcription failed.\nStatus: {response.status_code}"
+            )
             return
 
         try:
             data = response.json()
         except Exception:
-            await update.message.reply_text("⚠️ Error reading transcription response.")
+            await update.message.reply_text(
+                "⚠️ Error reading transcription response. Server returned invalid JSON."
+            )
             return
 
         text = data.get("text", "").strip()
@@ -59,7 +86,12 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"❌ Error: {e}")
         await update.message.reply_text(f"❌ Error: {str(e)}")
 
+
 def main():
+    if not TOKEN:
+        print("🚨 No Telegram token set. Exiting.")
+        return
+
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_handler))
@@ -67,6 +99,7 @@ def main():
 
     print("🤖 Bot is running...")
     app.run_polling(drop_pending_updates=True)
+
 
 if __name__ == "__main__":
     main()
