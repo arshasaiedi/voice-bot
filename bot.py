@@ -6,7 +6,7 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes, Com
 
 # Load from Railway
 TOKEN = os.getenv("TOKEN")
-HF_TOKEN = "hf_YOUR_FULL_HF_TOKEN_HERE"  # ← PASTE YOUR HUGGINGFACE TOKEN
+HF_TOKEN = "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"  # ← PASTE YOUR HUGGINGFACE TOKEN
 
 print(f"🚀 Starting bot...")
 print(f"🚀 Token loaded: {'YES' if TOKEN else 'NO'}")
