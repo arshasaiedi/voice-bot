@@ -34,7 +34,6 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         url = "https://api-inference.huggingface.co/models/openai/whisper-base"
         headers = {
             "Authorization": f"Bearer {HF_TOKEN}",
-            "Content-Type": "audio/ogg",
         }
 
         response = requests.post(url, headers=headers, data=voice_bytes, timeout=120)
@@ -42,6 +41,10 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"📡 HF status: {response.status_code}")
         print(f"📡 HF response (head): {response.text[:350]}")
 
+        if response.status_code == 503:
+            await update.message.reply_text("⏳ Model is loading, try again in a few seconds.")
+            return
+        
         # Special handling for 410 / HTML error pages
         if response.status_code == 410:
             await update.message.reply_text(
