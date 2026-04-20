@@ -27,10 +27,9 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"📥 Downloaded {len(voice_bytes)} bytes")
 
         # Guard: check HF token is present
-        if not HF_TOKEN:
-            await update.message.reply_text("❌ Hugging Face token is not set (HF_TOKEN is missing).")
-            return
-
+        print("HF token starts with:", HF_TOKEN[:4] if HF_TOKEN else "NONE")
+        print("HF token length:", len(HF_TOKEN) if HF_TOKEN else 0)
+    
         # HuggingFace Whisper API
         url = "https://api-inference.huggingface.co/models/openai/whisper-tiny"
         headers = {
