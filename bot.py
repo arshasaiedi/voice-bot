@@ -31,7 +31,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("HF token length:", len(HF_TOKEN) if HF_TOKEN else 0)
     
         # HuggingFace Whisper API
-        url = "https://api-inference.huggingface.co/models/openai/whisper-tiny"
+        url = "https://api-inference.huggingface.co/models/openai/whisper-small"
         headers = {
             "Authorization": f"Bearer {HF_TOKEN}",
             "Content-Type": "audio/ogg",
