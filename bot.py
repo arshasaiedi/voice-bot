@@ -23,10 +23,12 @@ print(f"GOOGLE creds loaded: {'YES' if GOOGLE_CREDENTIALS else 'NO'}")
 
 
 # 📊 GOOGLE SHEETS SETUP
-creds_dict = json.loads(GOOGLE_CREDENTIALS)
-
 scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+
+creds = Credentials.from_service_account_file(
+    "credentials.json",
+    scopes=scopes
+)
 
 client = gspread.authorize(creds)
 
